@@ -1,2 +1,4 @@
-# gpu-matrix-transpose
-GPU Matrix Transpose Optimization Benchmark
+# GPU Matrix Transpose
+
+GPU matrix transpose optimization
+
