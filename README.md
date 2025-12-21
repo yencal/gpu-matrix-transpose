@@ -22,11 +22,9 @@ This benchmark compares 5 transpose variants across matrix sizes from 32×32 to 
 - **Float2**: 2-element vectorized loads/stores (64-bit transactions)
 - **Float4**: 4-element vectorized loads/stores (128-bit transactions)
 
-All kernels use 32×32 thread blocks processing 32×32 tiles.
-
 ## NVIDIA GPU Bandwidth Plots
 
-The figures below show achieved memory bandwidth as percentage of theoretical peak.
+The figures below show measured memory bandwidth on different GPUs. All kernels use 32×32 thread blocks processing 32×32 tiles.
 
 * **H100**
 ![H100 Bandwidth](figures/bandwidth_plot_h100.png)
