@@ -161,9 +161,8 @@ BenchmarkResult RunTest(
 int main(int argc, char** argv)
 {
     constexpr int TILE = 32;
-    const dim3 BLOCK_DIM{TILE, TILE};
-    const int NUM_WARMUP = 10;
-    const int NUM_ITERATIONS = 100;
+    constexpr int NUM_WARMUP = 10;
+    constexpr int NUM_ITERATIONS = 100;
     const std::string CSV_FILENAME = "benchmark_results.csv";
 
     std::vector<BenchmarkResult> results;
@@ -171,11 +170,13 @@ int main(int argc, char** argv)
     // for (int power = 5; power <= 15; ++power)
     for (int power = 5; power < 6; ++power)
     {
-        int N = 1 << power;
+        const int N = 1 << power;
         std::cout << "\n=== Testing " << N << "x" << N << " matrix ===\n";
      
-        dim3 grid_dim{(N + TILE - 1) / TILE, (N + TILE - 1) / TILE};
-        BenchmarkConfig config{N, BLOCK_DIM, grid_dim, NUM_WARMUP, NUM_ITERATIONS};
+        const unsigned int grid_size = (N + TILE - 1) / TILE;
+        const dim3 block_dim{TILE, TILE};
+        const dim3 grid_dim{grid_size, grid_size};
+        BenchmarkConfig config{N, block_dim, grid_dim, NUM_WARMUP, NUM_ITERATIONS};
 
         // Scalar transpose kernels
         results.push_back(RunTest("Naive", TransposeNaive, config));
@@ -186,14 +187,18 @@ int main(int argc, char** argv)
         if (N % 2 == 0) {
             BenchmarkConfig config_f2 = config;
             config_f2.block_dim = dim3{TILE/2, TILE};
-            config_f2.grid_dim = dim3{(N/2 + TILE/2 - 1) / (TILE/2), (N + TILE - 1) / TILE};
+            const unsigned int grid_x_f2 = (N/2 + TILE/2 - 1) / (TILE/2);
+            const unsigned int grid_y_f2 = (N + TILE - 1) / TILE;
+            config_f2.grid_dim = dim3{grid_x_f2, grid_y_f2};
             results.push_back(RunTest("Float2", TransposeVec2<TILE>, config_f2));
         }
 
         if (N % 4 == 0) {
             BenchmarkConfig config_f4 = config;
             config_f4.block_dim = dim3{TILE/4, TILE};
-            config_f4.grid_dim = dim3{(N/4 + TILE/4 - 1) / (TILE/4), (N + TILE - 1) / TILE};
+            const unsigned int grid_x_f4 = (N/4 + TILE/4 - 1) / (TILE/4);
+            const unsigned int grid_y_f4 = (N + TILE - 1) / TILE;
+            config_f4.grid_dim = dim3{grid_x_f4, grid_y_f4};
             results.push_back(RunTest("Float4", TransposeVec4<TILE>, config_f4));
         }
     }
