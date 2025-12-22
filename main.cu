@@ -171,7 +171,7 @@ int main(int argc, char** argv)
     // for (int power = 5; power <= 15; ++power)
     for (int power = 5; power < 6; ++power)
     {
-        size_t N = 1 << power;
+        int N = 1 << power;
         std::cout << "\n=== Testing " << N << "x" << N << " matrix ===\n";
      
         dim3 grid_dim{(N + TILE - 1) / TILE, (N + TILE - 1) / TILE};
