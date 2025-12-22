@@ -187,14 +187,14 @@ int main(int argc, char** argv)
             BenchmarkConfig config_f2 = config;
             config_f2.block_dim = dim3{TILE/2, TILE};
             config_f2.grid_dim = dim3{(N/2 + TILE/2 - 1) / (TILE/2), (N + TILE - 1) / TILE};
-            results.push_back(RunTest("Float2", TransposeVec2<TILE, float2>, config_f2));
+            results.push_back(RunTest("Float2", TransposeVec2<TILE>, config_f2));
         }
 
         if (N % 4 == 0) {
             BenchmarkConfig config_f4 = config;
             config_f4.block_dim = dim3{TILE/4, TILE};
             config_f4.grid_dim = dim3{(N/4 + TILE/4 - 1) / (TILE/4), (N + TILE - 1) / TILE};
-            results.push_back(RunTest("Float4", TransposeVec4<TILE, float4>, config_f4));
+            results.push_back(RunTest("Float4", TransposeVec4<TILE>, config_f4));
         }
     }
 
