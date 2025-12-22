@@ -167,8 +167,7 @@ int main(int argc, char** argv)
 
     std::vector<BenchmarkResult> results;
 
-    // for (int power = 5; power <= 15; ++power)
-    for (int power = 5; power < 8; ++power)
+    for (int power = 5; power <= 15; ++power)
     {
         const int N = 1 << power;
         std::cout << "\n=== Testing " << N << "x" << N << " matrix ===\n";
