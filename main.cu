@@ -190,7 +190,6 @@ int main(int argc, char** argv)
             const unsigned int grid_y_f2 = (N + TILE - 1) / TILE;
             config_f2.grid_dim = dim3{grid_x_f2, grid_y_f2};
             results.push_back(RunTest("Float2", TransposeVec2<TILE>, config_f2));
-            results.push_back(RunTest("1DSmem_Float2", TransposeVec2_1DSmem<TILE>, config_f2));
         }
 
         if (N % 4 == 0) {
@@ -200,7 +199,6 @@ int main(int argc, char** argv)
             const unsigned int grid_y_f4 = (N + TILE - 1) / TILE;
             config_f4.grid_dim = dim3{grid_x_f4, grid_y_f4};
             results.push_back(RunTest("Float4", TransposeVec4<TILE>, config_f4));
-            results.push_back(RunTest("1DSmem_Float4", TransposeVec4_1DSmem<TILE>, config_f4));
         }
     }
 
