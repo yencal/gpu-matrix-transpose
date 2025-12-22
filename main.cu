@@ -16,7 +16,7 @@
     } while(0)
 
 struct BenchmarkConfig {
-    size_t N;
+    int N;
     dim3 block_dim;
     dim3 grid_dim;
     int num_warmup;
@@ -25,7 +25,7 @@ struct BenchmarkConfig {
 
 struct BenchmarkResult {
     std::string label;
-    size_t N;
+    int N;
     dim3 block_dim;
     dim3 grid_dim;
     float latency_ms;
