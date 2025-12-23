@@ -15,14 +15,6 @@
         } \
     } while(0)
 
-struct BenchmarkConfig {
-    int N;
-    dim3 block_dim;
-    dim3 grid_dim;
-    int num_warmup;
-    int num_iterations;
-};
-
 struct BenchmarkResult {
     std::string label;
     int N;
@@ -30,27 +22,28 @@ struct BenchmarkResult {
     dim3 grid_dim;
     float latency_ms;
     float bandwidth_GB_per_s;
+    float pct_of_peak;
 };
 
-void WriteCSV(const std::vector<BenchmarkResult>& results, const std::string& filename)
+struct DeviceInfo {
+    std::string name;
+    float peak_bandwidth_GBps;
+};
+
+DeviceInfo GetDeviceInfo(int device = 0)
 {
-    std::ofstream file(filename);
-    file << "Label,N,BlockSize,GridSize,LatencyMs,BandwidthGBps\n";
-    for (const auto& r : results) {
-        file << r.label << ","
-             << r.N << ","
-             << r.block_dim.x << "x" << r.block_dim.y << ","
-             << r.grid_dim.x << "x" << r.grid_dim.y << ","
-             << r.latency_ms << ","
-             << r.bandwidth_GB_per_s << "\n";
-    }
-    file.close();
-    std::cout << "Results written to " << filename << std::endl;
+    cudaDeviceProp prop;
+    CHECK_CUDA(cudaGetDeviceProperties(&prop, device));
+
+    // Peak BW = memoryClockRate (kHz) * memoryBusWidth (bits) * 2 (DDR) / 8 (bits->bytes) / 1e6 (to GB/s)
+    float peak_bw = (prop.memoryClockRate * 1e3f) * (prop.memoryBusWidth / 8) * 2 / 1e9f;
+
+    return {prop.name, peak_bw};
 }
 
 void Initialize(
-    float* __restrict__ matrix,
-    float* __restrict__ gold,
+    float* matrix,
+    float* gold,
     int N)
 {
     for (int row = 0; row < N; ++row) {
@@ -67,8 +60,8 @@ void Initialize(
 }
 
 void ValidateTranspose(
-    const float* __restrict__ result,
-    const float* __restrict__ reference,
+    const float* result,
+    const float* reference,
     int N)
 {
     for (size_t i = 0; i < N*N; ++i) {
@@ -83,10 +76,14 @@ void ValidateTranspose(
 template<typename KernelFunc>
 BenchmarkResult RunTest(
     const std::string& label,
-    KernelFunc kernel,
-    const BenchmarkConfig& config)
+    const KernelFunc& kernel,
+    const dim3 block_dim,
+    const dim3 grid_dim,
+    const int N,
+    const float peak_bandwidth,
+    const int num_warmup = 10,
+    const int num_iterations = 100)
 {
-    int N = config.N;
     size_t size_bytes = N * N * sizeof(float);
 
     // Host allocations
@@ -103,16 +100,15 @@ BenchmarkResult RunTest(
     CHECK_CUDA(cudaMemcpy(d_input, h_input, size_bytes, cudaMemcpyHostToDevice));
 
     // Validate first (fail fast)
-    kernel<<<config.grid_dim, config.block_dim>>>(d_input, d_transposed, N);
+    kernel<<<grid_dim, block_dim>>>(d_input, d_transposed, N);
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
     CHECK_CUDA(cudaMemcpy(h_transposed, d_transposed, size_bytes, cudaMemcpyDeviceToHost));
     ValidateTranspose(h_transposed, h_gold, N);
-    std::cout << "  ✓ " << label << " validation passed\n";
 
     // Warmup
-    for (int i = 0; i < config.num_warmup; ++i) {
-        kernel<<<config.grid_dim, config.block_dim>>>(d_input, d_transposed, N);
+    for (int i = 0; i < num_warmup; ++i) {
+        kernel<<<grid_dim, block_dim>>>(d_input, d_transposed, N);
     }
     CHECK_CUDA(cudaDeviceSynchronize());
 
@@ -122,22 +118,20 @@ BenchmarkResult RunTest(
     CHECK_CUDA(cudaEventCreate(&stop));
 
     CHECK_CUDA(cudaEventRecord(start));
-    for (int i = 0; i < config.num_iterations; ++i) {
-        kernel<<<config.grid_dim, config.block_dim>>>(d_input, d_transposed, N);
+    for (int i = 0; i < num_iterations; ++i) {
+        kernel<<<grid_dim, block_dim>>>(d_input, d_transposed, N);
     }
     CHECK_CUDA(cudaEventRecord(stop));
     CHECK_CUDA(cudaEventSynchronize(stop));
 
     float milliseconds = 0;
     CHECK_CUDA(cudaEventElapsedTime(&milliseconds, start, stop));
-    float avg_time_ms = milliseconds / config.num_iterations;
+    float avg_time_ms = milliseconds / num_iterations;
 
     // Calculate bandwidth (read + write)
     size_t bytes_transferred = 2 * size_bytes;
     float bandwidth_GB_per_s = (bytes_transferred / (avg_time_ms / 1000.0)) / 1e9;
-
-    std::cout << "  " << label << ": " << avg_time_ms << " ms, " 
-              << bandwidth_GB_per_s << " GB/s\n";
+    float pct_peak = (bandwidth_GB_per_s / peak_bandwidth) * 100.0f;
 
     // Cleanup
     CHECK_CUDA(cudaEventDestroy(start));
@@ -150,60 +144,110 @@ BenchmarkResult RunTest(
     
     return BenchmarkResult{
         label,
-        config.N,
-        config.block_dim,
-        config.grid_dim,
+        N,
+        block_dim,
+        grid_dim,
         avg_time_ms,
-        bandwidth_GB_per_s
+        bandwidth_GB_per_s,
+        pct_peak
     };
+}
+
+void PrintTable(const std::vector<BenchmarkResult>& results)
+{
+    std::cout << "\n";
+    std::cout << std::left << std::setw(30) << "Kernel"
+              << std::right << std::setw(12) << "Block"
+              << std::setw(12) << "Time(ms)"
+              << std::setw(14) << "BW(GB/s)"
+              << std::setw(10) << "% Peak"
+              << "\n";
+    std::cout << std::string(78, '-') << "\n";
+
+    for (const auto& r : results) {
+        std::string block_str = std::to_string(r.block_dim.x) + "x" + std::to_string(r.block_dim.y);
+        std::cout << std::left << std::setw(30) << r.label
+                  << std::right << std::setw(12) << block_str
+                  << std::setw(12) << std::fixed << std::setprecision(4) << r.latency_ms
+                  << std::setw(14) << std::setprecision(1) << r.bandwidth_GB_per_s
+                  << std::setw(9) << std::setprecision(1) << r.pct_of_peak << "%"
+                  << "\n";
+    }
+    std::cout << std::string(78, '-') << "\n";
+}
+
+void WriteCSV(const std::vector<BenchmarkResult>& results, const std::string& filename)
+{
+    std::ofstream file(filename);
+    file << "Kernel,BlockX,BlockY,LatencyMs,BandwidthGBps,PctPeak\n";
+    for (const auto& r : results) {
+        file << r.label << ","
+             << r.block_dim.x << "," << r.block_dim.y << ","
+             << r.latency_ms << ","
+             << r.bandwidth_GB_per_s << ","
+             << r.pct_of_peak << "\n";
+    }
+    std::cout << "Results written to " << filename << "\n";
 }
 
 int main(int argc, char** argv)
 {
+    constexpr int N = 32768;
     constexpr int TILE = 32;
-    constexpr int NUM_WARMUP = 10;
-    constexpr int NUM_ITERATIONS = 100;
-    const std::string CSV_FILENAME = "benchmark_results.csv";
+
+    // Get device info
+    DeviceInfo device = GetDeviceInfo();
+
+    std::cout << "=== Transpose Benchmark: " << N << "x" << N << " ===" << std::endl;
+    std::cout << "Device: " << device.name << std::endl;
+    std::cout << "Theoretical Peak BW: " << std::fixed << std::setprecision(1) 
+              << device.peak_bandwidth_GBps << " GB/s" << std::endl;
+    std::cout << "Matrix size: " << (2.0 * N * N * sizeof(float)) / 1e9 << " GB (read+write)" << std::endl;
 
     std::vector<BenchmarkResult> results;
+    float peak_bw = device.peak_bandwidth_GBps;
+    const unsigned int grid_size = (N + TILE - 1) / TILE;
 
-    for (int power = 5; power <= 15; ++power)
-    {
-        const int N = 1 << power;
-        std::cout << "\n=== Testing " << N << "x" << N << " matrix ===\n";
-     
-        const unsigned int grid_size = (N + TILE - 1) / TILE;
-        const dim3 block_dim{TILE, TILE};
-        const dim3 grid_dim{grid_size, grid_size};
-        BenchmarkConfig config{N, block_dim, grid_dim, NUM_WARMUP, NUM_ITERATIONS};
+    // === Baseline kernels ===
+    results.push_back(RunTest("Naive", TransposeNaive,
+        {TILE, TILE}, {grid_size, grid_size}, N, peak_bw));
+    results.push_back(RunTest("SMEM+BankConflicts", TransposeBankConflicts<TILE>,
+        {TILE, TILE}, {grid_size, grid_size}, N, peak_bw));
+    results.push_back(RunTest("SMEM+Padding", TransposeNoBankConflicts<TILE>,
+        {TILE, TILE}, {grid_size, grid_size}, N, peak_bw));
 
-        // Scalar transpose kernels
-        results.push_back(RunTest("Naive", TransposeNaive, config));
-        results.push_back(RunTest("BankConflicts", TransposeBankConflicts<TILE>, config));
-        results.push_back(RunTest("NoBankConflicts", TransposeNoBankConflicts<TILE>, config));
+    // === Coarsening sweep ===
+    results.push_back(RunTest("CBLOCK_ROW_16", TransposeNoBankConflictsCoarsen<TILE, 16>,
+        {TILE, 16}, {grid_size, grid_size}, N, peak_bw));
 
-        // Vectorized kernels (only if N is divisible)
-        if (N % 2 == 0) {
-            BenchmarkConfig config_f2 = config;
-            config_f2.block_dim = dim3{TILE/2, TILE};
-            const unsigned int grid_x_f2 = (N/2 + TILE/2 - 1) / (TILE/2);
-            const unsigned int grid_y_f2 = (N + TILE - 1) / TILE;
-            config_f2.grid_dim = dim3{grid_x_f2, grid_y_f2};
-            results.push_back(RunTest("Float2", TransposeVec2<TILE>, config_f2));
-        }
+    results.push_back(RunTest("BLOCK_ROW_8", TransposeNoBankConflictsCoarsen<TILE, 8>,
+        {TILE, 8}, {grid_size, grid_size}, N, peak_bw));
 
-        if (N % 4 == 0) {
-            BenchmarkConfig config_f4 = config;
-            config_f4.block_dim = dim3{TILE/4, TILE};
-            const unsigned int grid_x_f4 = (N/4 + TILE/4 - 1) / (TILE/4);
-            const unsigned int grid_y_f4 = (N + TILE - 1) / TILE;
-            config_f4.grid_dim = dim3{grid_x_f4, grid_y_f4};
-            results.push_back(RunTest("Float4", TransposeVec4<TILE>, config_f4));
-        }
-    }
+    results.push_back(RunTest("BLOCK_ROW_4", TransposeNoBankConflictsCoarsen<TILE, 4>,
+        {TILE, 4}, {grid_size, grid_size}, N, peak_bw));
 
-    WriteCSV(results, CSV_FILENAME);
-    std::cout << "\nBenchmark complete!\n";
+    // // Vectorized kernels (only if N is divisible)
+    // if (N % 2 == 0) {
+    //     BenchmarkConfig config_f2 = config;
+    //     config_f2.block_dim = dim3{TILE/2, TILE};
+    //     const unsigned int grid_x_f2 = (N/2 + TILE/2 - 1) / (TILE/2);
+    //     const unsigned int grid_y_f2 = (N + TILE - 1) / TILE;
+    //     config_f2.grid_dim = dim3{grid_x_f2, grid_y_f2};
+    //     results.push_back(RunTest("Float2", TransposeVec2<TILE>, config_f2));
+    // }
+
+    // if (N % 4 == 0) {
+    //     BenchmarkConfig config_f4 = config;
+    //     config_f4.block_dim = dim3{TILE/4, TILE};
+    //     const unsigned int grid_x_f4 = (N/4 + TILE/4 - 1) / (TILE/4);
+    //     const unsigned int grid_y_f4 = (N + TILE - 1) / TILE;
+    //     config_f4.grid_dim = dim3{grid_x_f4, grid_y_f4};
+    //     results.push_back(RunTest("Float4", TransposeVec4<TILE>, config_f4));
+    // }
+
+    // === Print results ===
+    PrintTable(results);
+    WriteCSV(results, "transpose_comparison.csv");
 
     return EXIT_SUCCESS;
 }

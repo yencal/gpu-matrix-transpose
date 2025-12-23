@@ -61,6 +61,30 @@ __global__ void TransposeNoBankConflicts(
     }
 }
 
+template <int TILE_DIM, int BLOCK_ROWS>
+__global__ void TransposeNoBankConflictsCoarsen(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    int N)
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    __shared__ float smem[TILE_DIM][TILE_DIM+1];
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
+        smem[threadIdx.y+j][threadIdx.x] = input[(y+j)*N + x];
+    }
+    __syncthreads();
+
+    x = blockIdx.y * blockDim.x + threadIdx.x;
+    y = blockIdx.x * blockDim.y + threadIdx.y;
+
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
+        output[(y+j)*N + x] = smem[threadIdx.x][threadIdx.y+j];
+    }
+}
+
 template <int TILE_DIM>
 __global__ void TransposeVec2(
     const float* __restrict__ input,
