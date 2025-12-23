@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <fstream>
 #include <string>
@@ -85,7 +86,7 @@ BenchmarkResult RunTest(
     const int num_iterations = 100)
 {
     std::cout << " - Running Benchmark for: " << label << std::endl;
-    
+
     size_t size_bytes = N * N * sizeof(float);
 
     // Host allocations
