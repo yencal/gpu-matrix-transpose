@@ -67,8 +67,8 @@ __global__ void TransposeNoBankConflictsCoarsen(
     float* __restrict__ output,
     int N)
 {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
 
     __shared__ float smem[TILE_DIM][TILE_DIM+1];
 
@@ -77,8 +77,8 @@ __global__ void TransposeNoBankConflictsCoarsen(
     }
     __syncthreads();
 
-    x = blockIdx.y * blockDim.x + threadIdx.x;
-    y = blockIdx.x * blockDim.y + threadIdx.y;
+    x = blockIdx.y * TILE_DIM + threadIdx.x;
+    y = blockIdx.x * TILE_DIM + threadIdx.y;
 
     for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
         output[(y+j)*N + x] = smem[threadIdx.x][threadIdx.y+j];

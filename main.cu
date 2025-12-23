@@ -220,7 +220,7 @@ int main(int argc, char** argv)
         {TILE, TILE}, {grid_size, grid_size}, N, peak_bw));
 
     // === Coarsening sweep ===
-    results.push_back(RunTest("CBLOCK_ROW_16", TransposeNoBankConflictsCoarsen<TILE, 16>,
+    results.push_back(RunTest("BLOCK_ROW_16", TransposeNoBankConflictsCoarsen<TILE, 16>,
         {TILE, 16}, {grid_size, grid_size}, N, peak_bw));
 
     results.push_back(RunTest("BLOCK_ROW_8", TransposeNoBankConflictsCoarsen<TILE, 8>,
