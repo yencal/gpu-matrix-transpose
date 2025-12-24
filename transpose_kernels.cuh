@@ -158,3 +158,84 @@ __global__ void TransposeVec4(
         reinterpret_cast<float4*>(output)[y * width + x] = data;
     }
 }
+template <int TILE_DIM, int BLOCK_ROWS>
+__global__ void TransposeVec2Coarsen(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    int N)
+{   
+    // Block size: (TILE_DIM/2, BLOCK_ROWS)
+    // TILE=32, BLOCK_ROWS=16 → (16, 16) = 256 threads, 2 rows/thread
+    // TILE=32, BLOCK_ROWS=8  → (16, 8)  = 128 threads, 4 rows/thread
+    // TILE=32, BLOCK_ROWS=4  → (16, 4)  = 64 threads,  8 rows/thread
+
+    __shared__ float tile[TILE_DIM][TILE_DIM + 1];
+
+    // Load phase - vectorized read, unpack to shared memory
+    int x = blockIdx.x * (TILE_DIM/2) + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    const int width = N / 2;
+
+    #pragma unroll
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
+        float2 data = reinterpret_cast<const float2*>(input)[(y+j) * width + x];
+        tile[threadIdx.y + j][threadIdx.x * 2 + 0] = data.x;
+        tile[threadIdx.y + j][threadIdx.x * 2 + 1] = data.y;
+    }
+    __syncthreads();
+
+    // Store phase - gather from shared memory, vectorized write
+    x = blockIdx.y * (TILE_DIM/2) + threadIdx.x;
+    y = blockIdx.x * TILE_DIM + threadIdx.y;
+
+    #pragma unroll
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
+        float2 data;
+        data.x = tile[threadIdx.x * 2 + 0][threadIdx.y + j];
+        data.y = tile[threadIdx.x * 2 + 1][threadIdx.y + j];
+        reinterpret_cast<float2*>(output)[(y+j) * width + x] = data;
+    }
+}
+
+template <int TILE_DIM, int BLOCK_ROWS>
+__global__ void TransposeVec4Coarsen(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    int N)
+{   
+    // Block size: (TILE_DIM/4, BLOCK_ROWS)
+    // TILE=32, BLOCK_ROWS=16 → (8, 16) = 128 threads, 2 rows/thread
+    // TILE=32, BLOCK_ROWS=8  → (8, 8)  = 64 threads,  4 rows/thread
+    // TILE=32, BLOCK_ROWS=4  → (8, 4)  = 32 threads,  8 rows/thread
+
+    __shared__ float tile[TILE_DIM][TILE_DIM + 1];
+
+    // Load phase - vectorized read, unpack to shared memory
+    int x = blockIdx.x * (TILE_DIM/4) + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+    const int width = N / 4;
+
+    #pragma unroll
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
+        float4 data = reinterpret_cast<const float4*>(input)[(y+j) * width + x];
+        tile[threadIdx.y + j][threadIdx.x * 4 + 0] = data.x;
+        tile[threadIdx.y + j][threadIdx.x * 4 + 1] = data.y;
+        tile[threadIdx.y + j][threadIdx.x * 4 + 2] = data.z;
+        tile[threadIdx.y + j][threadIdx.x * 4 + 3] = data.w;
+    }
+    __syncthreads();
+
+    // Store phase - gather from shared memory, vectorized write
+    x = blockIdx.y * (TILE_DIM/4) + threadIdx.x;
+    y = blockIdx.x * TILE_DIM + threadIdx.y;
+
+    #pragma unroll
+    for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
+        float4 data;
+        data.x = tile[threadIdx.x * 4 + 0][threadIdx.y + j];
+        data.y = tile[threadIdx.x * 4 + 1][threadIdx.y + j];
+        data.z = tile[threadIdx.x * 4 + 2][threadIdx.y + j];
+        data.w = tile[threadIdx.x * 4 + 3][threadIdx.y + j];
+        reinterpret_cast<float4*>(output)[(y+j) * width + x] = data;
+    }
+}

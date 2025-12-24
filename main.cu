@@ -179,20 +179,6 @@ void PrintTable(const std::vector<BenchmarkResult>& results)
     std::cout << std::string(78, '-') << "\n";
 }
 
-void WriteCSV(const std::vector<BenchmarkResult>& results, const std::string& filename)
-{
-    std::ofstream file(filename);
-    file << "Kernel,BlockX,BlockY,LatencyMs,BandwidthGBps,PctPeak\n";
-    for (const auto& r : results) {
-        file << r.label << ","
-             << r.block_dim.x << "," << r.block_dim.y << ","
-             << r.latency_ms << ","
-             << r.bandwidth_GB_per_s << ","
-             << r.pct_of_peak << "\n";
-    }
-    std::cout << "Results written to " << filename << "\n";
-}
-
 int main(int argc, char** argv)
 {
     constexpr int N = 32768;
@@ -209,7 +195,7 @@ int main(int argc, char** argv)
 
     std::vector<BenchmarkResult> results;
     float peak_bw = device.peak_bandwidth_GBps;
-    const unsigned int grid_size = (N + TILE - 1) / TILE;
+    const unsigned int grid_size = N / TILE;
 
     // === Baseline kernels ===
     results.push_back(RunTest("Naive", TransposeNaive,
@@ -219,38 +205,50 @@ int main(int argc, char** argv)
     results.push_back(RunTest("SMEM+Padding", TransposeNoBankConflicts<TILE>,
         {TILE, TILE}, {grid_size, grid_size}, N, peak_bw));
 
-    // === Coarsening sweep ===
-    results.push_back(RunTest("BLOCK_ROW_16", TransposeNoBankConflictsCoarsen<TILE, 16>,
+    // === Scalar Coarsening sweep ===
+    results.push_back(RunTest("Coarsen_BR16", TransposeNoBankConflictsCoarsen<TILE, 16>,
         {TILE, 16}, {grid_size, grid_size}, N, peak_bw));
-
-    results.push_back(RunTest("BLOCK_ROW_8", TransposeNoBankConflictsCoarsen<TILE, 8>,
+    results.push_back(RunTest("Coarsen_BR8", TransposeNoBankConflictsCoarsen<TILE, 8>,
         {TILE, 8}, {grid_size, grid_size}, N, peak_bw));
-
-    results.push_back(RunTest("BLOCK_ROW_4", TransposeNoBankConflictsCoarsen<TILE, 4>,
+    results.push_back(RunTest("Coarsen_BR4", TransposeNoBankConflictsCoarsen<TILE, 4>,
         {TILE, 4}, {grid_size, grid_size}, N, peak_bw));
 
-    // // Vectorized kernels (only if N is divisible)
-    // if (N % 2 == 0) {
-    //     BenchmarkConfig config_f2 = config;
-    //     config_f2.block_dim = dim3{TILE/2, TILE};
-    //     const unsigned int grid_x_f2 = (N/2 + TILE/2 - 1) / (TILE/2);
-    //     const unsigned int grid_y_f2 = (N + TILE - 1) / TILE;
-    //     config_f2.grid_dim = dim3{grid_x_f2, grid_y_f2};
-    //     results.push_back(RunTest("Float2", TransposeVec2<TILE>, config_f2));
-    // }
+    // === Vec2 kernels ===
+    results.push_back(RunTest("Vec2", TransposeVec2<TILE>,
+        {TILE/2, TILE}, {grid_size, grid_size}, N, peak_bw));
+    results.push_back(RunTest("Vec2_BR16", TransposeVec2Coarsen<TILE, 16>,
+        {TILE/2, 16}, {grid_size, grid_size}, N, peak_bw));
+    results.push_back(RunTest("Vec2_BR8", TransposeVec2Coarsen<TILE, 8>,
+        {TILE/2, 8}, {grid_size, grid_size}, N, peak_bw));
+    results.push_back(RunTest("Vec2_BR4", TransposeVec2Coarsen<TILE, 4>,
+        {TILE/2, 4}, {grid_size, grid_size}, N, peak_bw));
 
-    // if (N % 4 == 0) {
-    //     BenchmarkConfig config_f4 = config;
-    //     config_f4.block_dim = dim3{TILE/4, TILE};
-    //     const unsigned int grid_x_f4 = (N/4 + TILE/4 - 1) / (TILE/4);
-    //     const unsigned int grid_y_f4 = (N + TILE - 1) / TILE;
-    //     config_f4.grid_dim = dim3{grid_x_f4, grid_y_f4};
-    //     results.push_back(RunTest("Float4", TransposeVec4<TILE>, config_f4));
-    // }
+    // === Vec4 kernels ===
+    results.push_back(RunTest("Vec4", TransposeVec4<TILE>,
+        {TILE/4, TILE}, {grid_size, grid_size}, N, peak_bw));
+    results.push_back(RunTest("Vec4_BR16", TransposeVec4Coarsen<TILE, 16>,
+        {TILE/4, 16}, {grid_size, grid_size}, N, peak_bw));
+    results.push_back(RunTest("Vec4_BR8", TransposeVec4Coarsen<TILE, 8>,
+        {TILE/4, 8}, {grid_size, grid_size}, N, peak_bw));
+    results.push_back(RunTest("Vec4_BR4", TransposeVec4Coarsen<TILE, 4>,
+        {TILE/4, 4}, {grid_size, grid_size}, N, peak_bw));
+
+    // === 64x64 Tile variants ===
+    constexpr int TILE64 = 64;
+    const unsigned int grid_size_64 = N / TILE64;
+
+    results.push_back(RunTest("Vec2_T64_BR16", TransposeVec2Coarsen<TILE64, 16>,
+        {TILE64/2, 16}, {grid_size_64, grid_size_64}, N, peak_bw));
+    results.push_back(RunTest("Vec2_T64_BR8", TransposeVec2Coarsen<TILE64, 8>,
+        {TILE64/2, 8}, {grid_size_64, grid_size_64}, N, peak_bw));
+
+    results.push_back(RunTest("Vec4_T64_BR16", TransposeVec4Coarsen<TILE64, 16>,
+        {TILE64/4, 16}, {grid_size_64, grid_size_64}, N, peak_bw));
+    results.push_back(RunTest("Vec4_T64_BR8", TransposeVec4Coarsen<TILE64, 8>,
+        {TILE64/4, 8}, {grid_size_64, grid_size_64}, N, peak_bw));
 
     // === Print results ===
     PrintTable(results);
-    WriteCSV(results, "transpose_comparison.csv");
 
     return EXIT_SUCCESS;
 }
