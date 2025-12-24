@@ -245,11 +245,15 @@ int main(int argc, char** argv)
     constexpr int TILE64 = 64;
     const unsigned int grid_size_64 = N / TILE64;
 
+    results.push_back(RunTest("Vec2_T64_BR32", TransposeVec2Coarsen<TILE64, 32>,
+        {TILE64/2, 32}, {grid_size_64, grid_size_64}, N, peak_bw));
     results.push_back(RunTest("Vec2_T64_BR16", TransposeVec2Coarsen<TILE64, 16>,
         {TILE64/2, 16}, {grid_size_64, grid_size_64}, N, peak_bw));
     results.push_back(RunTest("Vec2_T64_BR8", TransposeVec2Coarsen<TILE64, 8>,
         {TILE64/2, 8}, {grid_size_64, grid_size_64}, N, peak_bw));
 
+    results.push_back(RunTest("Vec4_T64_BR32", TransposeVec4Coarsen<TILE64, 32>,
+        {TILE64/4, 32}, {grid_size_64, grid_size_64}, N, peak_bw));
     results.push_back(RunTest("Vec4_T64_BR16", TransposeVec4Coarsen<TILE64, 16>,
         {TILE64/4, 16}, {grid_size_64, grid_size_64}, N, peak_bw));
     results.push_back(RunTest("Vec4_T64_BR8", TransposeVec4Coarsen<TILE64, 8>,
