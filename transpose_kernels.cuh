@@ -72,6 +72,7 @@ __global__ void TransposeNoBankConflictsCoarsen(
 
     __shared__ float smem[TILE_DIM][TILE_DIM+1];
 
+    #pragma unroll
     for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
         smem[threadIdx.y+j][threadIdx.x] = input[(y+j)*N + x];
     }
@@ -80,6 +81,7 @@ __global__ void TransposeNoBankConflictsCoarsen(
     x = blockIdx.y * TILE_DIM + threadIdx.x;
     y = blockIdx.x * TILE_DIM + threadIdx.y;
 
+    #pragma unroll
     for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
         output[(y+j)*N + x] = smem[threadIdx.x][threadIdx.y+j];
     }
