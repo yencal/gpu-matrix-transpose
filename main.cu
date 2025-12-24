@@ -208,55 +208,55 @@ int main(int argc, char** argv)
     // === Baseline kernels ===
     results.push_back(RunTest("Naive", TransposeNaive,
         {TILE, TILE}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("SMEM+BankConflicts", TransposeBankConflicts<TILE>,
+    results.push_back(RunTest("Tiled", TransposeBankConflicts<TILE>,
         {TILE, TILE}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("SMEM+Padding", TransposeNoBankConflicts<TILE>,
+    results.push_back(RunTest("TiledPadded", TransposeNoBankConflicts<TILE>,
         {TILE, TILE}, {grid_size, grid_size}, N, peak_bw));
 
     // === Scalar Coarsening sweep ===
-    results.push_back(RunTest("Coarsen_BR16", TransposeNoBankConflictsCoarsen<TILE, 16>,
+    results.push_back(RunTest("Coarsen2", TransposeNoBankConflictsCoarsen<TILE, 16>,
         {TILE, 16}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("Coarsen_BR8", TransposeNoBankConflictsCoarsen<TILE, 8>,
+    results.push_back(RunTest("Coarsen4", TransposeNoBankConflictsCoarsen<TILE, 8>,
         {TILE, 8}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("Coarsen_BR4", TransposeNoBankConflictsCoarsen<TILE, 4>,
+    results.push_back(RunTest("Coarsen8", TransposeNoBankConflictsCoarsen<TILE, 4>,
         {TILE, 4}, {grid_size, grid_size}, N, peak_bw));
 
     // === Vec2 kernels ===
     results.push_back(RunTest("Vec2", TransposeVec2<TILE>,
         {TILE/2, TILE}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("Vec2_BR16", TransposeVec2Coarsen<TILE, 16>,
+    results.push_back(RunTest("Vec2Coarsen2", TransposeVec2Coarsen<TILE, 16>,
         {TILE/2, 16}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("Vec2_BR8", TransposeVec2Coarsen<TILE, 8>,
+    results.push_back(RunTest("Vec2Coarsen4", TransposeVec2Coarsen<TILE, 8>,
         {TILE/2, 8}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("Vec2_BR4", TransposeVec2Coarsen<TILE, 4>,
+    results.push_back(RunTest("Vec2Coarsen8", TransposeVec2Coarsen<TILE, 4>,
         {TILE/2, 4}, {grid_size, grid_size}, N, peak_bw));
 
     // === Vec4 kernels ===
     results.push_back(RunTest("Vec4", TransposeVec4<TILE>,
         {TILE/4, TILE}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("Vec4_BR16", TransposeVec4Coarsen<TILE, 16>,
+    results.push_back(RunTest("Vec4Coarsen2", TransposeVec4Coarsen<TILE, 16>,
         {TILE/4, 16}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("Vec4_BR8", TransposeVec4Coarsen<TILE, 8>,
+    results.push_back(RunTest("Vec4Coarsen4", TransposeVec4Coarsen<TILE, 8>,
         {TILE/4, 8}, {grid_size, grid_size}, N, peak_bw));
-    results.push_back(RunTest("Vec4_BR4", TransposeVec4Coarsen<TILE, 4>,
+    results.push_back(RunTest("Vec4Coarsen8", TransposeVec4Coarsen<TILE, 4>,
         {TILE/4, 4}, {grid_size, grid_size}, N, peak_bw));
 
     // === 64x64 Tile variants ===
     constexpr int TILE64 = 64;
     const unsigned int grid_size_64 = N / TILE64;
 
-    results.push_back(RunTest("Vec2_T64_BR32", TransposeVec2Coarsen<TILE64, 32>,
+    results.push_back(RunTest("Vec2_T64", TransposeVec2Coarsen<TILE64, 32>,
         {TILE64/2, 32}, {grid_size_64, grid_size_64}, N, peak_bw));
-    results.push_back(RunTest("Vec2_T64_BR16", TransposeVec2Coarsen<TILE64, 16>,
+    results.push_back(RunTest("Vec2_T64_Coarsen2", TransposeVec2Coarsen<TILE64, 16>,
         {TILE64/2, 16}, {grid_size_64, grid_size_64}, N, peak_bw));
-    results.push_back(RunTest("Vec2_T64_BR8", TransposeVec2Coarsen<TILE64, 8>,
+    results.push_back(RunTest("Vec2_T64_Coarsen4", TransposeVec2Coarsen<TILE64, 8>,
         {TILE64/2, 8}, {grid_size_64, grid_size_64}, N, peak_bw));
 
-    results.push_back(RunTest("Vec4_T64_BR32", TransposeVec4Coarsen<TILE64, 32>,
+    results.push_back(RunTest("Vec4_T64", TransposeVec4Coarsen<TILE64, 32>,
         {TILE64/4, 32}, {grid_size_64, grid_size_64}, N, peak_bw));
-    results.push_back(RunTest("Vec4_T64_BR16", TransposeVec4Coarsen<TILE64, 16>,
+    results.push_back(RunTest("Vec4_T64_Coarsen2", TransposeVec4Coarsen<TILE64, 16>,
         {TILE64/4, 16}, {grid_size_64, grid_size_64}, N, peak_bw));
-    results.push_back(RunTest("Vec4_T64_BR8", TransposeVec4Coarsen<TILE64, 8>,
+    results.push_back(RunTest("Vec4_T64_Coarsen4", TransposeVec4Coarsen<TILE64, 8>,
         {TILE64/4, 8}, {grid_size_64, grid_size_64}, N, peak_bw));
 
     // === Print results ===
