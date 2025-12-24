@@ -181,8 +181,15 @@ void PrintTable(const std::vector<BenchmarkResult>& results)
 
 int main(int argc, char** argv)
 {
-    constexpr int N = 32768;
-    constexpr int TILE = 32;
+    int N = 32768;
+
+    if (argc >= 2) {
+        N = std::atoi(argv[1]);
+        if (N <= 0 || N % 64 != 0) {
+            std::cerr << "Error: N must be positive and divisible by 64" << std::endl;
+            return EXIT_FAILURE;
+        }
+    }
 
     // Get device info
     DeviceInfo device = GetDeviceInfo();
@@ -193,6 +200,7 @@ int main(int argc, char** argv)
               << device.peak_bandwidth_GBps << " GB/s" << std::endl;
     std::cout << "Matrix size: " << (2.0 * N * N * sizeof(float)) / 1e9 << " GB (read+write)" << std::endl;
 
+    constexpr int TILE = 32;
     std::vector<BenchmarkResult> results;
     float peak_bw = device.peak_bandwidth_GBps;
     const unsigned int grid_size = N / TILE;
